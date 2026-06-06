@@ -24,13 +24,12 @@ async function bootstrap() {
 
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // يشيل أي field مش في الـ DTO
+      whitelist: true,
       forbidNonWhitelisted: true,
-      transform: true, // يحول types تلقائياً
+      transform: true,
     }),
   );
 
-  // Swagger UI على /api/docs
   const config = new DocumentBuilder()
     .setTitle('Threads Clone API')
     .setDescription('REST API for Threads Clone')
