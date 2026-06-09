@@ -1,13 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  IsArray,
   IsEmail,
   IsNotEmpty,
   IsOptional,
-  IsUrl,
   MinLength,
 } from 'class-validator';
 
-export class RegisterDto {
+export class CreateUserDto {
   @ApiProperty({ example: 'Hxj4t@example.com' })
   @IsEmail({}, { message: 'Invalid email address' })
   @IsNotEmpty({ message: 'Email is required' })
@@ -28,13 +28,6 @@ export class RegisterDto {
   @MinLength(8, { message: 'Password must be at least 8 characters long' })
   password!: string;
 
-  @ApiProperty({ example: 'Hxj4t' })
-  @IsNotEmpty({ message: 'Confirm Password is required' })
-  @MinLength(8, {
-    message: 'Confirm Password must be at least 8 characters long',
-  })
-  confirmPassword!: string;
-
   @ApiPropertyOptional()
   @IsOptional()
   @MinLength(2, { message: 'Bio must be at least 2 characters long' })
@@ -42,6 +35,25 @@ export class RegisterDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsUrl()
-  profilePicture?: string;
+  ProfilePicture?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsArray({ message: 'Threads must be an array of thread IDs' })
+  threads?: string[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsArray({ message: 'Followers must be an array of user IDs' })
+  followers?: string[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsArray({ message: 'Following must be an array of user IDs' })
+  following?: string[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsArray({ message: 'Communities must be an array of community IDs' })
+  communities?: string[];
 }
