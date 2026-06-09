@@ -1,3 +1,4 @@
+// backend/src/threads/schema/thread.schema.ts
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { HydratedDocument, Types } from 'mongoose';
 
@@ -15,15 +16,15 @@ export class Thread {
     type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     default: [],
   })
-  likes?: Types.ObjectId[];
+  likes!: Types.ObjectId[];
 
   @Prop({
     type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Thread' }],
     default: [],
   })
-  comments?: Types.ObjectId[];
+  comments!: Types.ObjectId[];
 
-  @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Thread', default: null })
+  @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Thread' })
   parentId?: Types.ObjectId | null;
 
   @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Community' })
@@ -31,24 +32,3 @@ export class Thread {
 }
 
 export const ThreadSchema = SchemaFactory.createForClass(Thread);
-
-ThreadSchema.pre(
-  'findOneAndDelete',
-  async function (this: mongoose.Query<any, Thread>) {
-    try {
-      const threadId = this.getQuery()._id;
-
-      if (!threadId) return;
-
-      // الحل الصحيح: استخدم this.model بدل mongoose.model
-      await this.model.deleteMany({
-        parentId: threadId,
-      });
-
-      console.log(`Pre-hook: Deleted all replies for thread ${threadId}`);
-    } catch (error) {
-      console.error('Error in pre-delete hook:', error);
-      throw error;
-    }
-  },
-);

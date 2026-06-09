@@ -5,12 +5,14 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { Thread, ThreadSchema } from './schema/thread.schema';
 import { UsersModule } from 'src/users/users.module';
 import { AuthModule } from 'src/auth/auth.module';
+import { CommunitiesModule } from 'src/communities/communities.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: Thread.name, schema: ThreadSchema }]),
     UsersModule,
     AuthModule,
+    CommunitiesModule,
   ],
   controllers: [ThreadsController],
   providers: [ThreadsService],

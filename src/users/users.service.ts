@@ -3,6 +3,7 @@ import { User, UserDocument } from './schema/user.schema';
 import { Model } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { Types } from 'mongoose';
 
 @Injectable()
 export class UsersService {
@@ -57,5 +58,21 @@ export class UsersService {
       .exec();
 
     return { users, page, limit, nextPage: page + 1 };
+  }
+
+  async addCommunityToUser(userId: string, communityId: Types.ObjectId) {
+    await this.userModel.findOneAndUpdate(
+      { _id: userId },
+      { $push: { communities: communityId } },
+      { new: true },
+    );
+  }
+
+  async removeCommunityFromUser(userId: string, communityId: Types.ObjectId) {
+    await this.userModel.findOneAndUpdate(
+      { _id: userId },
+      { $pull: { communities: communityId } },
+      { new: true },
+    );
   }
 }

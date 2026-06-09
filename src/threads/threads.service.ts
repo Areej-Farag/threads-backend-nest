@@ -11,12 +11,14 @@ import { Thread, ThreadDocument } from './schema/thread.schema';
 import { CreateThreadDto } from './dto/create-thread.dto';
 import { UpdateThreadDto } from './dto/update-thread.dto';
 import { UsersService } from '../users/users.service';
+import { CommunitiesService } from 'src/communities/communities.service';
 
 @Injectable()
 export class ThreadsService {
   constructor(
     private readonly userService: UsersService,
     @InjectModel(Thread.name) private threadModel: Model<ThreadDocument>,
+    private readonly communityService: CommunitiesService,
   ) {}
 
   /**
@@ -27,6 +29,7 @@ export class ThreadsService {
     userId: string,
   ): Promise<ThreadDocument> {
     const parentId = createThreadDto.parentId;
+    const community = createThreadDto.community;
     const user = await this.userService.findById(userId);
     if (!user) {
       throw new NotFoundException('User not found');
@@ -36,10 +39,17 @@ export class ThreadsService {
       ...createThreadDto,
       author: new Types.ObjectId(userId),
       parentId: parentId ? new Types.ObjectId(parentId) : null,
+      community: community ? new Types.ObjectId(community) : null,
     };
 
     try {
       const createdThread = await this.threadModel.create(threadData);
+      if (community) {
+        await this.communityService.addThreadToCommunity(
+          createdThread._id,
+          community,
+        );
+      }
       if (parentId) {
         await this.threadModel.findOneAndUpdate(
           { _id: parentId },
@@ -97,7 +107,7 @@ export class ThreadsService {
 
   async findAll(limit: number = 20, page: number = 1) {
     const threads = await this.threadModel
-      .find()
+      .find({ parentId: null })
       .populate({
         path: 'author',
         select: 'username name profilePicture',
@@ -190,9 +200,7 @@ export class ThreadsService {
 
   async delete(threadId: Types.ObjectId, userId: string) {
     const thread = await this.threadModel.findById(threadId);
-    if (!thread) {
-      throw new NotFoundException('Thread not found');
-    }
+    if (!thread) throw new NotFoundException('Thread not found');
 
     if (thread.author.toString() !== userId) {
       throw new ForbiddenException(
@@ -200,20 +208,19 @@ export class ThreadsService {
       );
     }
 
-    try {
-      const deletedThread = await this.threadModel.findOneAndDelete({
-        _id: threadId,
-      });
+    await this.deleteWithChildren(threadId);
 
-      return {
-        success: true,
-        message: 'Thread and all its replies have been deleted successfully',
-        deletedThread,
-      };
-    } catch (error) {
-      console.error('Delete thread error:', error);
-      throw new BadRequestException('Error deleting thread');
+    return { success: true, message: 'Thread and all replies deleted' };
+  }
+
+  async deleteWithChildren(threadId: Types.ObjectId) {
+    const children = await this.threadModel.find({ parentId: threadId });
+
+    for (const child of children) {
+      await this.deleteWithChildren(child._id);
     }
+
+    await this.threadModel.deleteOne({ _id: threadId });
   }
 
   async createLike(threadId: Types.ObjectId, userId: string) {

@@ -10,4 +10,7 @@ export class CreateThreadDto {
   @ApiProperty({ description: 'The parent thread of the thread' })
   @IsOptional()
   parentId?: string;
+  @ApiProperty({ description: 'The parent thread of the thread' })
+  @IsOptional()
+  community?: string;
 }
