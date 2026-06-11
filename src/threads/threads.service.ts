@@ -213,7 +213,7 @@ export class ThreadsService {
     return { success: true, message: 'Thread and all replies deleted' };
   }
 
-  async deleteWithChildren(threadId: Types.ObjectId) {
+  private async deleteWithChildren(threadId: Types.ObjectId) {
     const children = await this.threadModel.find({ parentId: threadId });
 
     for (const child of children) {

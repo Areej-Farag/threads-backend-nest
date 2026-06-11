@@ -9,6 +9,7 @@ import { CommunitiesModule } from './communities/communities.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ChatModule } from './chat/chat.module';
 import { AuthModule } from './auth/auth.module';
+import { UploadModule } from './upload/upload.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -19,6 +20,7 @@ import { AuthModule } from './auth/auth.module';
     NotificationsModule,
     ChatModule,
     AuthModule,
+    UploadModule,
   ],
   controllers: [AppController],
   providers: [AppService],
