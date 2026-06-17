@@ -6,6 +6,7 @@ import { Thread, ThreadSchema } from './schema/thread.schema';
 import { UsersModule } from 'src/users/users.module';
 import { AuthModule } from 'src/auth/auth.module';
 import { CommunitiesModule } from 'src/communities/communities.module';
+import { UploadModule } from 'src/upload/upload.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { CommunitiesModule } from 'src/communities/communities.module';
     UsersModule,
     AuthModule,
     CommunitiesModule,
+    UploadModule,
   ],
   controllers: [ThreadsController],
   providers: [ThreadsService],

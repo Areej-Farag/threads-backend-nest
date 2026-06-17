@@ -29,6 +29,9 @@ export class Thread {
 
   @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Community' })
   community?: Types.ObjectId | null;
+
+  @Prop({ type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Media' }] })
+  media?: Types.ObjectId[];
 }
 
 export const ThreadSchema = SchemaFactory.createForClass(Thread);

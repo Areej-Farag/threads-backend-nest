@@ -34,8 +34,8 @@ export class User {
   })
   likedThreads?: Types.ObjectId[];
 
-  @Prop()
-  profilePicture?: string;
+  @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Media', default: null })
+  profilePicture?: Types.ObjectId | null;
 
   @Prop()
   bio?: string;

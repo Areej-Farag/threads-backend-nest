@@ -8,9 +8,17 @@ import {
   Delete,
   Patch,
   Query,
+  UseInterceptors,
+  UploadedFiles,
 } from '@nestjs/common/decorators';
 import { AuthGuard } from 'src/auth/auth.guard';
-import { ApiTags, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiParam,
+  ApiBody,
+  ApiConsumes,
+} from '@nestjs/swagger';
 import { ThreadsService } from './threads.service';
 import { Types } from 'mongoose';
 import { ParseObjectIdPipe } from 'src/common/pipes/parse-objectid.pipe';
@@ -18,6 +26,8 @@ import { CurrentUser } from 'src/auth/current-user.decorator';
 import { CreateThreadDto } from './dto/create-thread.dto';
 import { UpdateThreadDto } from './dto/update-thread.dto';
 import type { JwtPayload } from 'src/auth/types';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { multerConfig } from 'src/upload/multer.config';
 
 @ApiTags('Threads')
 @ApiBearerAuth()
@@ -74,11 +84,38 @@ export class ThreadsController {
   }
 
   @Post()
+  @UseInterceptors(FilesInterceptor('files', 10, multerConfig))
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'Thread Creation with Optional Files',
+    schema: {
+      type: 'object',
+      properties: {
+        files: {
+          // ← Change from 'file' to 'files'
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+        },
+        text: { type: 'string' },
+        community: { type: 'string' },
+        parentId: { type: 'string' },
+      },
+    },
+  })
   async createThread(
-    @Body() createThreadDto: CreateThreadDto,
+    @UploadedFiles() files: Express.Multer.File[],
+    @Body() body: CreateThreadDto,
     @CurrentUser() currentUser: JwtPayload,
   ) {
-    return await this.threadsService.create(createThreadDto, currentUser.sub);
+    const createThreadDto: CreateThreadDto = { ...body };
+    return await this.threadsService.create(
+      createThreadDto,
+      currentUser.sub,
+      files,
+    );
   }
 
   @Delete(':id')

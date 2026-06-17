@@ -13,7 +13,15 @@ export class Media {
   name!: string;
 
   @Prop({ type: String, required: true })
-  publicId!: string;
+  public_id!: string;
+  @Prop()
+  mimeType!: string;
+
+  @Prop()
+  size!: number;
+
+  @Prop({ type: String, enum: ['profile', 'thread'] }) // للتصنيف
+  type!: string;
 }
 
 export const MediaSchema = SchemaFactory.createForClass(Media);

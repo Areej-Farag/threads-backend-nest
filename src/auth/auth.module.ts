@@ -9,12 +9,14 @@ import { AuthController } from './auth.controller';
 import { AuthGuard } from './auth.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { UsersModule } from '../users/users.module';
+import { UploadModule } from 'src/upload/upload.module';
 
 @Module({
   imports: [
     forwardRef(() => UsersModule),
     PassportModule,
     ConfigModule,
+    UploadModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({

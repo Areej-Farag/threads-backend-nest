@@ -1,15 +1,50 @@
-import { HttpException, Injectable } from '@nestjs/common';
+import { HttpException, Injectable, NotFoundException } from '@nestjs/common';
 import { User, UserDocument } from './schema/user.schema';
 import { Model } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { Types } from 'mongoose';
+import { UploadService } from 'src/upload/upload.service';
+import { CreateUserDto } from './dto/create-user-dto';
 
 @Injectable()
 export class UsersService {
-  constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {}
+  constructor(
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    private uploadService: UploadService,
+  ) {}
 
-  async create(createUserDto: any): Promise<UserDocument> {
+  async updateProfilePicture(userId: string, file: Express.Multer.File) {
+    // how to start a transaction in MongoDB
+    const session = await this.userModel.db.startSession();
+    session.startTransaction();
+
+    try {
+      // 1. رفع الصورة
+      const media = await this.uploadService.uploadSingle(file, 'profile');
+
+      // 2. تحديث اليوزر
+      const user = await this.userModel.findByIdAndUpdate(
+        userId,
+        { profilePicture: media._id },
+        { session, new: true },
+      );
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      await session.commitTransaction();
+      return user;
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      await session.endSession();
+    }
+  }
+
+  async create(createUserDto: CreateUserDto): Promise<UserDocument> {
     const createdUser = new this.userModel(createUserDto);
     return await createdUser.save();
   }
@@ -23,7 +58,24 @@ export class UsersService {
   }
 
   async delete(id: string): Promise<void> {
-    await this.userModel.findByIdAndDelete(id).exec();
+    const user = await this.userModel.findById(id).exec();
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    const session = await this.userModel.db.startSession();
+    session.startTransaction();
+    try {
+      if (user.profilePicture) {
+        await this.uploadService.deleteMediaById(user.profilePicture);
+      }
+      await this.userModel.findByIdAndDelete(id).session(session).exec();
+      await session.commitTransaction();
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      await session.endSession();
+    }
   }
   async update(id: string, updateUserDto: UpdateUserDto) {
     const user = await this.userModel.findById(id);
@@ -72,6 +124,37 @@ export class UsersService {
     await this.userModel.findOneAndUpdate(
       { _id: userId },
       { $pull: { communities: communityId } },
+      { new: true },
+    );
+  }
+
+  async addThreadToUser(userId: string, threadId: Types.ObjectId) {
+    await this.userModel.findOneAndUpdate(
+      { _id: userId },
+      { $push: { threads: threadId } },
+      { new: true },
+    );
+  }
+
+  async removeThreadFromUser(userId: string, threadId: Types.ObjectId) {
+    await this.userModel.findOneAndUpdate(
+      { _id: userId },
+      { $pull: { threads: threadId } },
+      { new: true },
+    );
+  }
+
+  async AddLikedThread(threadId: Types.ObjectId, userId: string) {
+    await this.userModel.findOneAndUpdate(
+      { _id: userId },
+      { $push: { likedThreads: threadId } },
+      { new: true },
+    );
+  }
+  async RemoveLikedThread(threadId: Types.ObjectId, userId: string) {
+    await this.userModel.findOneAndUpdate(
+      { _id: userId },
+      { $pull: { likedThreads: threadId } },
       { new: true },
     );
   }

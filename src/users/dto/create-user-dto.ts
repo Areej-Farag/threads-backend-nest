@@ -6,6 +6,7 @@ import {
   IsOptional,
   MinLength,
 } from 'class-validator';
+import { Types } from 'mongoose';
 
 export class CreateUserDto {
   @ApiProperty({ example: 'Hxj4t@example.com' })
@@ -31,11 +32,11 @@ export class CreateUserDto {
   @ApiPropertyOptional()
   @IsOptional()
   @MinLength(2, { message: 'Bio must be at least 2 characters long' })
-  bio?: string;
+  bio?: string | null;
 
   @ApiPropertyOptional()
   @IsOptional()
-  ProfilePicture?: string;
+  profilePicture?: Types.ObjectId | null;
 
   @ApiPropertyOptional()
   @IsOptional()

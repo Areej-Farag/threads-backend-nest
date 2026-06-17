@@ -38,10 +38,5 @@ export class RegisterDto {
   @ApiPropertyOptional()
   @IsOptional()
   @MinLength(2, { message: 'Bio must be at least 2 characters long' })
-  bio?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsUrl()
-  profilePicture?: string;
+  bio?: string | null;
 }

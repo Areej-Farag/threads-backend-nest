@@ -4,29 +4,65 @@ import {
   BadRequestException,
   NotFoundException,
   ForbiddenException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { ClientSession, Model, Types } from 'mongoose';
 import { Thread, ThreadDocument } from './schema/thread.schema';
 import { CreateThreadDto } from './dto/create-thread.dto';
 import { UpdateThreadDto } from './dto/update-thread.dto';
 import { UsersService } from '../users/users.service';
 import { CommunitiesService } from 'src/communities/communities.service';
+import { UploadService } from 'src/upload/upload.service';
+import { MediaDocument } from 'src/upload/schema/media.schema';
 
 @Injectable()
 export class ThreadsService {
   constructor(
     private readonly userService: UsersService,
     @InjectModel(Thread.name) private threadModel: Model<ThreadDocument>,
+    private uploadService: UploadService,
     private readonly communityService: CommunitiesService,
   ) {}
 
-  /**
-   * إنشاء ثريد جديد (Post أو Comment)
-   */
+  // async createThreadWithImages(
+  //   createThreadDto: CreateThreadDto,
+  //   userId: string,
+  //   files?: Express.Multer.File[],
+  // ) {
+  //   const session = await this.threadModel.db.startSession();
+  //   session.startTransaction();
+
+  //   try {
+  //     let mediaDocs: MediaDocument[] = [];
+
+  //     // 1. رفع الصور (لو فيه)
+  //     if (files && files.length > 0) {
+  //       mediaDocs = await this.uploadService.uploadMultiple(files, 'thread');
+  //     }
+
+  //     // 2. إنشاء الثريد
+  //     const thread = new this.threadModel({
+  //       ...createThreadDto,
+  //       author: userId,
+  //       images: mediaDocs.map((m) => m._id),
+  //     });
+
+  //     const savedThread = await thread.save({ session });
+
+  //     await session.commitTransaction();
+  //     return savedThread.populate('images');
+  //   } catch (error) {
+  //     await session.abortTransaction();
+  //     throw error;
+  //   } finally {
+  //     session.endSession();
+  //   }
+  // }
   async create(
     createThreadDto: CreateThreadDto,
     userId: string,
+    files?: Express.Multer.File[],
   ): Promise<ThreadDocument> {
     const parentId = createThreadDto.parentId;
     const community = createThreadDto.community;
@@ -34,15 +70,22 @@ export class ThreadsService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
-
-    const threadData: any = {
-      ...createThreadDto,
-      author: new Types.ObjectId(userId),
-      parentId: parentId ? new Types.ObjectId(parentId) : null,
-      community: community ? new Types.ObjectId(community) : null,
-    };
+    const session = await this.threadModel.db.startSession();
+    session.startTransaction();
 
     try {
+      let mediaDocs: MediaDocument[] = [];
+      if (files && files.length > 0) {
+        mediaDocs = await this.uploadService.uploadMultiple(files, 'thread');
+      }
+      const threadData: any = {
+        ...createThreadDto,
+        author: new Types.ObjectId(userId),
+        parentId: parentId ? new Types.ObjectId(parentId) : null,
+        community: community ? new Types.ObjectId(community) : null,
+        media: mediaDocs.map((m) => m._id),
+      };
+
       const createdThread = await this.threadModel.create(threadData);
       if (community) {
         await this.communityService.addThreadToCommunity(
@@ -57,10 +100,14 @@ export class ThreadsService {
           { new: true },
         );
       }
-      return createdThread;
+
+      await this.userService.addThreadToUser(userId, createdThread._id);
+      return createdThread.populate('media');
     } catch (error) {
       console.error('Create thread error:', error);
       throw new BadRequestException('Error creating thread');
+    } finally {
+      await session.endSession();
     }
   }
 
@@ -97,7 +144,7 @@ export class ThreadsService {
         );
       }
 
-      return thread;
+      return thread.populate('media');
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
       console.error('Find thread error:', error);
@@ -121,14 +168,21 @@ export class ThreadsService {
         populate: [
           { path: 'author', select: 'username name profilePicture' },
           { path: 'likes', select: 'username name profilePicture' },
+          { path: 'media', select: 'url mediaType' },
         ],
       })
+      .populate('media')
       .sort({ createdAt: -1 })
       .limit(limit)
       .skip((page - 1) * limit)
       .exec();
 
-    return { threads, page, limit, nextPage: page + 1 };
+    return {
+      threads,
+      page,
+      limit,
+      nextPage: page + 1,
+    };
   }
 
   async findUserThreads(userId: string, limit: number = 20, page: number = 1) {
@@ -150,8 +204,10 @@ export class ThreadsService {
           populate: [
             { path: 'author', select: 'username name profilePicture' },
             { path: 'likes', select: 'username name profilePicture' },
+            { path: 'media', select: 'url mediaType' },
           ],
         })
+        .populate('media')
         .sort({ createdAt: -1 })
         .limit(limit)
         .skip((page - 1) * limit)
@@ -208,21 +264,66 @@ export class ThreadsService {
       );
     }
 
-    await this.deleteWithChildren(threadId);
+    const session = await this.threadModel.db.startSession();
+    session.startTransaction();
 
-    return { success: true, message: 'Thread and all replies deleted' };
+    try {
+      await this.deleteWithChildren(threadId, session, userId);
+      await this.userService.removeThreadFromUser(userId, threadId);
+      await session.commitTransaction();
+
+      return {
+        success: true,
+        message: 'Thread and all related data deleted successfully',
+      };
+    } catch (error) {
+      await session.abortTransaction();
+      console.error('Delete transaction failed:', error);
+      throw new InternalServerErrorException('Failed to delete thread');
+    } finally {
+      await session.endSession();
+    }
   }
 
-  private async deleteWithChildren(threadId: Types.ObjectId) {
-    const children = await this.threadModel.find({ parentId: threadId });
+  private async deleteWithChildren(
+    threadId: Types.ObjectId,
+    session: ClientSession,
+    userId: string,
+  ) {
+    // 1. حذف الـ replies (children) أولاً (Recursion)
+    const children = await this.threadModel
+      .find({ parentId: threadId })
+      .session(session);
 
     for (const child of children) {
-      await this.deleteWithChildren(child._id);
+      if (userId === child.author.toString()) {
+        await this.userService.removeThreadFromUser(userId, child._id);
+      }
+      await this.deleteWithChildren(child._id, session, userId);
     }
 
-    await this.threadModel.deleteOne({ _id: threadId });
+    // 2. حذف الثريد الحالي
+    const thread = await this.threadModel.findById(threadId).session(session);
+    if (thread) {
+      // حذف الميديا أولاً
+      await this.deleteThreadMedia(thread, session);
+
+      // حذف الثريد
+      await this.threadModel.deleteOne({ _id: threadId }).session(session);
+    }
   }
 
+  private async deleteThreadMedia(
+    thread: ThreadDocument,
+    session?: ClientSession,
+  ) {
+    if (!thread.media || thread.media.length === 0) return;
+
+    // حذف من Cloudinary + MongoDB (من خلال UploadService)
+    await this.uploadService.deleteThreadMedia(thread.media);
+
+    // مش محتاجين نعدل الـ array لأننا هنحذف الـ document كامل
+  }
   async createLike(threadId: Types.ObjectId, userId: string) {
     try {
       const thread = await this.threadModel.findById(threadId);
@@ -245,6 +346,7 @@ export class ThreadsService {
           { _id: threadId },
           { $pull: { likes: userId } },
         );
+        await this.userService.RemoveLikedThread(threadId, userId);
         return {
           success: true,
           message: 'Like removed successfully',
@@ -254,7 +356,7 @@ export class ThreadsService {
         { _id: threadId },
         { $push: { likes: userId } },
       );
-
+      await this.userService.AddLikedThread(threadId, userId);
       return {
         success: true,
         message: 'Like added successfully',
@@ -293,6 +395,10 @@ export class ThreadsService {
         .populate({
           path: 'author',
           select: 'username name profilePicture',
+        })
+        .populate('media')
+        .sort({
+          createdAt: -1,
         })
         .limit(limit)
         .skip((page - 1) * limit)

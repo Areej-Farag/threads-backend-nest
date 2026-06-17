@@ -12,6 +12,7 @@ import { Thread, ThreadSchema } from '../threads/schema/thread.schema';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 import { AuthModule } from '../auth/auth.module';
+import { UploadModule } from 'src/upload/upload.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { AuthModule } from '../auth/auth.module';
       { name: Thread.name, schema: ThreadSchema },
     ]),
     forwardRef(() => AuthModule),
+    UploadModule,
   ],
   controllers: [UsersController],
   providers: [UsersService],
